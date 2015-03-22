@@ -1,0 +1,122 @@
+---
+title: "Machine Learning Assignment"
+author: "thendricco"
+output:
+  html_document:
+    theme: journal
+    highlight: tango
+---
+## Executive Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The aim of this report will be to use use data from accelerometers placed on the belt, forearm, arm, and dumbell of six participants to predict and classify how well they were doing the exercise.
+
+## Environment Settings
+The following libraries are used.
+
+```{r}
+library(caret)
+library(corrplot)
+library(kernlab)
+library(knitr)
+library(randomForest)
+```
+```{r setoptions, echo = FALSE}
+opts_chunk$set(cache = FALSE)
+```
+
+## Loading and Preparing the data
+The 2 csv files containing the training and test data were downloaded into a data folder in the working directory. 
+
+```{r, echo=FALSE, eval = FALSE}
+# check if a data folder exists; if not then create one
+if (!file.exists("data")) {dir.create("data")}
+
+# file URL and destination file
+fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+destfile1 <- "./data/pml-training.csv"
+fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+destfile2 <- "./data/pml-testing.csv"
+
+# download the file and note the time
+download.file(fileUrl1, destfile = destfile1)
+download.file(fileUrl2, destfile = destfile2)
+dateDownloaded <- date()
+```
+
+## Loading the Training Data
+
+```{r}
+data_training <- read.csv("./data/pml-training.csv", na.strings= c("NA",""," "))
+```
+Substantial NA values were found and caused noise for the model. Therefore a decision to remove the columns and NA values was made.
+
+```{r}
+# clean the data by removing columns with NAs etc
+data_training_NAs <- apply(data_training, 2, function(x) {sum(is.na(x))})
+data_training_clean <- data_training[,which(data_training_NAs == 0)]
+
+# remove identifier columns such as name, timestamps etc
+data_training_clean <- data_training_clean[8:length(data_training_clean)]
+```
+
+## Creating the model
+The data set is split up to 70% training and 30% cross-validation.
+
+```{r}
+# split the cleaned testing data into training and cross validation
+inTrain <- createDataPartition(y = data_training_clean$classe, p = 0.7, list = FALSE)
+training <- data_training_clean[inTrain, ]
+crossval <- data_training_clean[-inTrain, ]
+```
+
+A random forest model is chosen to predict the classification and subsequently a plot is drawn to see the relationships.
+
+```{r, fig.height = 6, fig.width = 8}
+# plot a correlation matrix
+correlMatrix <- cor(training[, -length(training)])
+corrplot(correlMatrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.5,  tl.col = rgb(0, 0, 0))
+```
+
+- The dark red colours indicate a highly negative relationship. 
+
+- The dark blue colors indicate a highly positive relationship.
+
+Subsequently, fit the model predict using everything else as predictor.
+
+```{r}
+# fit a model to predict the classe using everything else as a predictor
+model <- randomForest(classe ~ ., data = training)
+model
+```
+
+A small OOB error rate of 0.52% is observered.
+
+## Cross-validation
+The model is then used to classify the remaining 30% of the data. 
+
+Results are placed in a confusionMatrix to determine the accuracy.
+
+```{r}
+# crossvalidate the model using the remaining 30% of data
+predictCrossVal <- predict(model, crossval)
+confusionMatrix(crossval$classe, predictCrossVal)
+```
+
+The model yielded a 99.6% prediction accuracy.
+
+## Predictions
+The testing data is then loaded.
+Which the model is then use to predict the 20 results.
+
+```{r}
+# apply the same treatment to the final testing data
+data_test <- read.csv("./data/pml-testing.csv", na.strings= c("NA",""," "))
+data_test_NAs <- apply(data_test, 2, function(x) {sum(is.na(x))})
+data_test_clean <- data_test[,which(data_test_NAs == 0)]
+data_test_clean <- data_test_clean[8:length(data_test_clean)]
+
+# predict the classes of the test set
+predictTest <- predict(model, data_test_clean)
+predictTest
+```
